@@ -1,0 +1,15 @@
+{
+  "base_url": "https://api.siliconflow.cn/v1",
+  "api_key": "your_api_key_here",
+  "model": "Qwen/Qwen2.5-VL-72B-Instruct",
+  "work_dir": ".",
+  "model_dir": "C:\\\\Users\\\\YourName\\\\.EasyOCR\\\\model",
+  "output_dir": ".",
+  "model_history": [],
+  "model_removed": [],
+  "showapi_accounts": [],
+  "showapi_appkey": "",
+  "showapi_secret": "",
+  "showapi_base": "https://route.showapi.com",
+  "showapi_enabled": true
+}

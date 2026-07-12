@@ -440,7 +440,7 @@ class MedicineOCRApp:
 
     # ----- 设置 -----
     def open_settings(self):
-        dialog = SettingsDialog(self.root, self.config)
+        dialog = SettingsDialog(self.root, self.config, self)
         if dialog.result:
             self.config = dialog.result
             save_config(self.config)
@@ -462,7 +462,8 @@ class MedicineOCRApp:
 
 # ===== 设置对话框 =====
 class SettingsDialog:
-    def __init__(self, parent, current_config):
+    def __init__(self, parent, current_config, app):
+        self.app = app
         self.result = None
         dialog = tk.Toplevel(parent)
         dialog.title("API 设置")
@@ -721,7 +722,7 @@ EasyOCR 模型文件存放目录，首次使用需联网下载约 50MB。
             dialog.destroy()
 
         def on_test():
-            self._test_connection(
+            self.app._test_connection(
                 base_url_var.get().strip(),
                 api_key_var.get().strip(),
                 model_var.get().strip() or "gpt-4o",

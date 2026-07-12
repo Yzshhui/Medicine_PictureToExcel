@@ -1,0 +1,9 @@
+openai>=1.0.0
+easyocr>=1.7.0
+torch
+torchvision
+opencv-python
+Pillow
+openpyxl
+numpy
+requests

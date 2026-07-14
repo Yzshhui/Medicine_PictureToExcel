@@ -1,11 +1,13 @@
 # 药品包装/发票识别工具
 
 将药品包装盒或发票图片批量识别为结构化 Excel，支持药名、厂家、国药准字、规格四字段提取。
+个人工作中经常需要把客户发来的药品包装、药品小票中的药品信息识别出来，查询验证真伪，还要补全缺失的信息。
+功能非常单一的小工具，针对的单一业务，很局限。
 
 ## 功能特性
 
 - 双模式识别
-  - 本地 EasyOCR：无需联网，适合清晰包装盒文字
+  - 本地 EasyOCR：无需联网，适合清晰包装盒文字（本地模型很吃配置，不太好使）
   - AI 视觉 API（OpenAI 兼容）：支持模糊/复杂布局/发票，准确率更高
 - 智能解析：自动从 OCR 文本或 AI 返回中提取 4 字段，容错别名映射
 - 国药准字验证：集成万维易源 ShowAPI (1468-4) 官方药品数据库校验
@@ -35,7 +37,7 @@ numpy
 
 base_url: OpenAI 兼容 API 地址（如 SiliconFlow: https://api.siliconflow.cn/v1）
 api_key: API 密钥
-model: 视觉模型名称（必须支持图像输入，如 Qwen/Qwen2.5-VL-72B-Instruct）
+model: 视觉模型名称
 work_dir: 默认图片选择目录
 model_dir: EasyOCR 模型存放目录（首次运行自动下载 ~50MB）
 output_dir: Excel 导出默认目录
@@ -45,12 +47,6 @@ showapi_appkey: 万维易源 AppKey（药品验证）
 showapi_secret: 万维易源 Secret
 showapi_base: API 基址（默认 https://route.showapi.com）
 showapi_enabled: 是否启用药品验证
-
-## 推荐模型 (SiliconFlow)
-
-Qwen/Qwen2.5-VL-72B-Instruct: 强推，视觉能力强，中文理解好
-Qwen/Qwen-VL-Plus: 速度较快，准确度良
-gpt-4o: OpenAI 官方，需海外网络
 
 注意：纯文本模型（如 Qwen3.5-9B、deepseek-v3）无视觉能力，不可用于图片识别。
 
@@ -68,7 +64,7 @@ gpt-4o: OpenAI 官方，需海外网络
 ## ShowAPI 药品验证
 
 - 接口：万维易源 1468-4 药名查询药品信息
-- 免费额度：每日 ~100 次，足够日常使用
+- 免费额度：每个账号每日 50 次，足够日常使用
 - 自动对比识别结果与官方数据库，不匹配标红提示
 
 ## 目录结构
@@ -80,20 +76,6 @@ showapi_client.py
 config.json
 start.bat
 README.md
-
-## 常见问题
-
-Q: 识别结果为空？
-A: 检查模型是否为视觉模型（必须含 VL/Vision）；图片是否过模糊/倾斜/文字过小；尝试切换 AI 视觉模式
-
-Q: EasyOCR 首次运行卡住？
-A: 首次需下载模型 (~50MB)，请耐心等待或检查网络。
-
-Q: 国药准字格式错误？
-A: 标准格式：国药准字H/Z/S/B/J + 8位数字，程序会自动校验并警告。
-
-Q: 如何删除下拉列表里的模型？
-A: 模型下拉框右键 -> 选择删除：xxx -> 自动持久化，下次不再显示。可点恢复默认列表找回。
 
 ## 许可
 

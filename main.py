@@ -31,7 +31,7 @@ def load_config():
         "output_dir": "",
         "model_history": [],
         "model_removed": [],
-        "showapi_accounts": [],
+        "showapi_appkey_history": [],
     }
     if os.path.exists(CONFIG_FILE):
         try:
@@ -269,12 +269,11 @@ class MedicineOCRApp:
                     self.images[idx]["results"] = results
 
                     # ShowAPI 验证（在工作线程中，避免阻塞UI）
-                    if self.config.get("showapi_enabled") and self.config.get("showapi_appkey") and self.config.get("showapi_secret"):
+                    if self.config.get("showapi_enabled") and self.config.get("showapi_appkey"):
                         try:
                             from showapi_client import ShowApiClient
                             client = ShowApiClient(
                                 self.config["showapi_appkey"],
-                                self.config["showapi_secret"],
                                 self.config.get("showapi_base", "https://route.showapi.com"),
                                 cache_file=os.path.join(
                                     self.config.get("work_dir") or os.path.dirname(os.path.abspath(__file__)),
@@ -287,8 +286,10 @@ class MedicineOCRApp:
                                     if not search_key:
                                         search_key = r.get("药名", "")
                                     if search_key:
+                                        print(f"[ShowAPI验证] 查询: {search_key} -> 待返回", flush=True)
                                         resp = client.search_drug(search_key, max_result=5)
                                         candidates = ShowApiClient.parse_response(resp)
+                                        print(f"[ShowAPI验证] 返回 {len(candidates)} 条结果", flush=True)
                                         if candidates:
                                             # 简单匹配：药名+准字号都对
                                             best = None
@@ -307,6 +308,13 @@ class MedicineOCRApp:
                                                     if lv and av and lv != av:
                                                         warns.append(f"{local_f}不一致: 识别'{lv}' vs 官方'{av}'")
                                                 r["_warn"] = (r.get("_warn", []) + warns)
+
+                                                # 补全缺失字段：API查到但本地缺失的字段直接填入
+                                                for local_f, api_f in [("药名", "药品名称"), ("厂家", "生产企业"),
+                                                                               ("国药准字", "批准文号"), ("规格", "规格")]:
+                                                    if not r.get(local_f) and best.get(api_f):
+                                                        r[local_f] = best.get(api_f)
+                                                        r["_warn"] = r.get("_warn", []) + [f"{local_f}已通过API补全: {best.get(api_f)}"]
                         except Exception as e:
                             print(f"[ShowAPI验证] 第{idx+1}张出错: {e}", flush=True)
 
@@ -460,6 +468,24 @@ class MedicineOCRApp:
         self.root.destroy()
 
 
+    def _test_connection(self, base_url, api_key, model):
+        if not api_key:
+            messagebox.showwarning("提示", "请先输入 API Key")
+            return
+        self.status_label.config(text="正在测试连接…")
+        def _run():
+            try:
+                from openai import OpenAI
+                client = OpenAI(base_url=base_url, api_key=api_key, timeout=30)
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": "返回ok"}],
+                    max_tokens=5,
+                )
+                self.root.after(0, lambda: self.status_label.config(text=f"连接成功 | {model} | {response.choices[0].message.content}"))
+            except Exception as e:
+                self.root.after(0, lambda: self.status_label.config(text=f"连接失败: {e}"))
+        threading.Thread(target=_run, daemon=True).start()
 # ===== 设置对话框 =====
 class SettingsDialog:
     def __init__(self, parent, current_config, app):
@@ -569,46 +595,30 @@ class SettingsDialog:
 
         ttk.Label(frame, text="ShowAPI AppKey:").grid(row=7, column=0, sticky=tk.W, pady=5)
         showapi_appkey_var = tk.StringVar(value=current_config.get("showapi_appkey", ""))
-        showapi_secret_var = tk.StringVar(value=current_config.get("showapi_secret", ""))
-        ttk.Entry(frame, textvariable=showapi_appkey_var, width=50).grid(row=7, column=1, sticky=tk.EW, padx=(5, 0))
-
-        ttk.Label(frame, text="ShowAPI Secret:").grid(row=8, column=0, sticky=tk.W, pady=5)
-        showapi_combo = ttk.Combobox(frame, textvariable=showapi_secret_var, width=47)
-        showapi_combo.grid(row=8, column=1, sticky=tk.EW, padx=(5, 0))
+        ttk.Entry(frame, textvariable=showapi_appkey_var, width=38).grid(row=7, column=1, sticky=tk.EW, padx=(5, 0))
+        showapi_combo = ttk.Combobox(frame, textvariable=showapi_appkey_var, width=12)
+        showapi_combo.grid(row=7, column=2, sticky=tk.EW, padx=(2, 0))
 
         def _refresh_showapi_values():
-            _accounts = list(current_config.get("showapi_accounts", []))
-            _cur_key = current_config.get("showapi_appkey", "")
-            _cur_secret = current_config.get("showapi_secret", "")
-            if _cur_key and not any(a.get("appkey") == _cur_key for a in _accounts):
-                _accounts.insert(0, {"appkey": _cur_key, "secret": _cur_secret})
-            _vals, _seen = [], set()
-            for a in _accounts:
-                k = a.get("appkey", "")
-                if k and k not in _seen:
-                    _seen.add(k)
-                    _vals.append(k)
-            showapi_combo["values"] = _vals
+            _hist = list(current_config.get("showapi_appkey_history", []))
+            _cur = current_config.get("showapi_appkey", "")
+            if _cur and _cur not in _hist:
+                _hist.insert(0, _cur)
+            showapi_combo["values"] = _hist[:10]
 
         def _on_showapi_select(event):
-            _k = showapi_secret_var.get()
-            for a in current_config.get("showapi_accounts", []):
-                if a.get("appkey") == _k:
-                    showapi_appkey_var.set(a.get("appkey", ""))
-                    showapi_secret_var.set(a.get("secret", ""))
-                    break
+            showapi_appkey_var.set(showapi_combo.get())
 
         def _delete_showapi(_k):
-            _accounts = [a for a in current_config.get("showapi_accounts", []) if a.get("appkey") != _k]
-            current_config["showapi_accounts"] = _accounts
+            _hist = [k for k in current_config.get("showapi_appkey_history", []) if k != _k]
+            current_config["showapi_appkey_history"] = _hist
             save_config(current_config)
             _refresh_showapi_values()
             if showapi_appkey_var.get() == _k:
                 showapi_appkey_var.set("")
-                showapi_secret_var.set("")
 
         def _reset_showapi():
-            current_config["showapi_accounts"] = []
+            current_config["showapi_appkey_history"] = []
             save_config(current_config)
             _refresh_showapi_values()
 
@@ -628,14 +638,13 @@ class SettingsDialog:
         showapi_combo.bind("<<ComboboxSelected>>", _on_showapi_select)
         showapi_combo.bind("<Button-3>", _on_showapi_right_click)
 
-        ttk.Label(frame, text="ShowAPI Base URL:").grid(row=9, column=0, sticky=tk.W, pady=5)
+        ttk.Label(frame, text="ShowAPI Base URL:").grid(row=8, column=0, sticky=tk.W, pady=5)
         showapi_base_var = tk.StringVar(value=current_config.get("showapi_base", "https://route.showapi.com"))
-        ttk.Entry(frame, textvariable=showapi_base_var, width=50).grid(row=9, column=1, sticky=tk.EW, padx=(5, 0))
+        ttk.Entry(frame, textvariable=showapi_base_var, width=50).grid(row=8, column=1, sticky=tk.EW, padx=(5, 0))
 
-        ttk.Label(frame, text="启用验证:").grid(row=10, column=0, sticky=tk.W, pady=5)
+        ttk.Label(frame, text="启用验证:").grid(row=9, column=0, sticky=tk.W, pady=5)
         showapi_enabled_var = tk.BooleanVar(value=current_config.get("showapi_enabled", True))
-        ttk.Checkbutton(frame, variable=showapi_enabled_var).grid(row=10, column=1, sticky=tk.W, padx=(5, 0))
-
+        ttk.Checkbutton(frame, variable=showapi_enabled_var).grid(row=9, column=1, sticky=tk.W, padx=(5, 0))
         def show_help():
             help_win = tk.Toplevel(dialog)
             help_win.title("设置说明")
@@ -670,13 +679,7 @@ EasyOCR 模型文件存放目录，首次使用需联网下载约 50MB。
 7. ShowAPI AppKey
 万维易源（showapi.com）应用标识，用于国药准字验证。
 
-8. ShowAPI Secret
-签名密钥，可选。留空则只用 AppKey 简单模式调用；填写则启用签名（更规范安全）。
-
-9. ShowAPI 密钥历史
-密钥栏下拉记忆已用过的 AppKey + Secret 配对，选择自动回填，右键可删除。
-
-10. 按钮
+8. 按钮
 测试连接：验证 API Key 与模型是否可用。
 保存：写入配置并关闭。  取消：放弃修改。
 """
@@ -699,11 +702,10 @@ EasyOCR 模型文件存放目录，首次使用需联网下载约 50MB。
                 _hist.insert(0, _model)
                 current_config["model_history"] = _hist[:15]
             _k = showapi_appkey_var.get().strip()
-            _s = showapi_secret_var.get().strip()
-            _accounts = [a for a in current_config.get("showapi_accounts", []) if a.get("appkey") != _k]
-            if _k:
-                _accounts.insert(0, {"appkey": _k, "secret": _s})
-            current_config["showapi_accounts"] = _accounts[:10]
+            _hist = list(current_config.get("showapi_appkey_history", []))
+            if _k and _k not in _hist:
+                _hist.insert(0, _k)
+            current_config["showapi_appkey_history"] = _hist[:10]
             self.result = {
                 "base_url": base_url_var.get().strip(),
                 "api_key": api_key_var.get().strip(),
@@ -714,7 +716,6 @@ EasyOCR 模型文件存放目录，首次使用需联网下载约 50MB。
                 "model_history": current_config.get("model_history", []),
                 "model_removed": current_config.get("model_removed", []),
                 "showapi_appkey": showapi_appkey_var.get().strip(),
-                "showapi_secret": showapi_secret_var.get().strip(),
                 "showapi_base": showapi_base_var.get().strip(),
                 "showapi_enabled": showapi_enabled_var.get(),
             }
@@ -737,30 +738,6 @@ EasyOCR 模型文件存放目录，首次使用需联网下载约 50MB。
 
         dialog.wait_window()
 
-    def _test_connection(self, base_url, api_key, model):
-        if not api_key:
-            messagebox.showwarning("提示", "请先输入 API Key")
-            return
-        self.status_label.config(text="正在测试连接…")
-        def _run():
-            try:
-                from openai import OpenAI
-                client = OpenAI(base_url=base_url, api_key=api_key, timeout=30)
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": "返回ok"}],
-                    max_tokens=5,
-                )
-                self.root.after(0, lambda: (
-                    self.status_label.config(text="连接成功"),
-                    messagebox.showinfo("成功", f"连接成功！\n模型: {model}\n返回: {response.choices[0].message.content}")
-                ))
-            except Exception as e:
-                self.root.after(0, lambda: (
-                    self.status_label.config(text="连接失败"),
-                    messagebox.showerror("连接失败", str(e))
-                ))
-        threading.Thread(target=_run, daemon=True).start()
 def main():
     root = tk.Tk()
     app = MedicineOCRApp(root)

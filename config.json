@@ -4,19 +4,17 @@
   "model": "deepseek-ai/DeepSeek-OCR",
   "work_dir": "E:\\Codex_workspace\\Dailywork\\Project-002-medicine-excel",
   "model_dir": "C:\\Users\\Administrator\\.EasyOCR\\model",
-  "output_dir": "E:/Codex_workspace/Dailywork/Project-002-medicine-excel",
+  "output_dir": "",
   "model_history": [
-    "deepseek-ai/DeepSeek-OCR",
-    "gpt-4o"
+    "deepseek-ai/DeepSeek-OCR"
   ],
   "model_removed": [
-    "Qwen/Qwen3.5-9B",
+    "gpt-4o",
     "Qwen/Qwen2.5-VL-72B-Instruct",
     "Qwen/Qwen-VL-Plus",
-    "moonshot-v1-8k-vision-preview",
     "Qwen/Qwen-VL-Max",
+    "moonshot-v1-8k-vision-preview",
     "gpt-4o-mini",
-    "gpt-4o",
     "gpt-4.1",
     "gpt-4.1-mini",
     "claude-sonnet-4-20250514",
@@ -27,7 +25,6 @@
     "deepseek-r1"
   ],
   "showapi_appkey": "93354609913f4579B2CBD474Cb5A7684",
-  "showapi_secret": "",
   "showapi_base": "https://route.showapi.com",
   "showapi_enabled": true
 }
